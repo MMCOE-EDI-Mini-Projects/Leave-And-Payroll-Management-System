@@ -4,8 +4,7 @@ import viteLogo from './assets/vite.svg'
 //import heroImg from './assets/hero.png'
 import './App.css'
 import Login from './login'
-//import Actual from './components/actual'
-//import Signup from './components/login/newaccount'
+import Signup from './signup'
 import {Routes, Route} from 'react-router-dom'
 
 function App() {
@@ -15,7 +14,8 @@ function App() {
     <>
     {/* <h1>MMCOE</h1> */}
     <Routes>
-      <Route path='/' element={<Login></Login>}></Route> 
+      <Route path='/' element={<Login></Login>}></Route>
+      <Route path='/newaccount' element={<Signup></Signup>}></Route>
     </Routes>
     
     </>

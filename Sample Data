@@ -1,0 +1,540 @@
+                                                        Sample data
+
+1.Department
+INSERT INTO department
+    (department_code, department_name, description, parent_department_id, is_active)
+VALUES
+    ('HR', 'Human Resources', 'Manages employee recruitment and welfare', NULL, TRUE),
+    ('IT', 'Information Technology', 'Manages software and technology operations', NULL, TRUE),
+    ('FIN', 'Finance', 'Manages company finances and accounting', NULL, TRUE);
+
+
+
+2.Designation
+INSERT INTO designation
+    (designation_code, designation_name, job_level, description, is_active)
+VALUES
+    ('SE', 'Software Engineer', 'Junior', 'Develops and maintains software applications', TRUE),
+    ('SSE', 'Senior Software Engineer', 'Senior', 'Leads software development and technical tasks', TRUE),
+    ('HRM', 'HR Manager', 'Manager', 'Manages human resources and employee activities', TRUE);
+
+
+
+3.Employee
+INSERT INTO employee
+(
+    employee_code,
+    first_name,
+    last_name,
+    gender,
+    date_of_birth,
+    email,
+    phone,
+    date_of_joining,
+    date_of_exit,
+    employment_type,
+    employment_status,
+    department_id,
+    designation_id,
+    reporting_manager_id,
+    username,
+    password_hash,
+    role,
+    is_active
+)
+VALUES
+(
+    'EMP001',
+    'Rahul',
+    'Sharma',
+    'MALE',
+    '2000-05-15',
+    'rahul@company.com',
+    '9876543210',
+    '2024-06-10',
+    NULL,
+    'FULL_TIME',
+    'ACTIVE',
+    2,
+    2,
+    NULL,
+    'rahul',
+    'hashed_password_123',
+    'MANAGER',
+    TRUE
+),
+(
+    'EMP002',
+    'Amit',
+    'Patil',
+    'MALE',
+    '2001-08-20',
+    'amit@company.com',
+    '9876543211',
+    '2025-01-15',
+    NULL,
+    'FULL_TIME',
+    'ACTIVE',
+    2,
+    1,
+    1,
+    'amit',
+    'hashed_password_456',
+    'EMPLOYEE',
+    TRUE
+),
+(
+    'EMP003',
+    'Priya',
+    'Deshmukh',
+    'FEMALE',
+    '2000-11-10',
+    'priya@company.com',
+    '9876543212',
+    '2024-09-01',
+    NULL,
+    'FULL_TIME',
+    'ACTIVE',
+    1,
+    3,
+    NULL,
+    'priya',
+    'hashed_password_789',
+    'HR_ADMIN',
+    TRUE
+);
+
+
+4.Leave type
+INSERT INTO leave_type
+(
+    leave_code,
+    leave_name,
+    description,
+    annual_entitlement,
+    is_paid,
+    allows_half_day,
+    allows_carry_forward,
+    max_carry_forward,
+    is_active
+)
+VALUES
+(
+    'CL',
+    'Casual Leave',
+    'Leave for personal or casual reasons',
+    12.00,
+    TRUE,
+    TRUE,
+    FALSE,
+    0.00,
+    TRUE
+),
+(
+    'SL',
+    'Sick Leave',
+    'Leave taken due to illness or medical reasons',
+    10.00,
+    TRUE,
+    TRUE,
+    FALSE,
+    0.00,
+    TRUE
+),
+(
+    'PL',
+    'Paid Leave',
+    'Paid leave for planned personal purposes',
+    15.00,
+    TRUE,
+    TRUE,
+    TRUE,
+    5.00,
+    TRUE
+);
+
+5.Leave balance
+INSERT INTO leave_balance
+(
+    employee_id,
+    leave_type_id,
+    leave_year,
+    opening_balance,
+    accrued,
+    used
+) 
+VALUES
+(1, 1, 2026, 12.00, 0.00, 2.00),
+(2, 1, 2026, 12.00, 0.00, 3.00),
+(3, 2, 2026, 10.00, 0.00, 1.00);
+
+
+6.leave_application
+INSERT INTO leave_application
+(
+    employee_id,
+    leave_type_id,
+    start_date,
+    end_date,
+    total_days,
+    reason,
+    status,
+    approver_id,
+    actioned_at,
+    manager_comments
+)
+VALUES
+(
+    1,
+    1,
+    '2026-09-21',
+    '2026-09-22',
+    2.00,
+    'Personal work',
+    'PENDING',
+    NULL,
+    NULL,
+    NULL
+),
+(
+    2,
+    2,
+    '2026-09-23',
+    '2026-09-24',
+    2.00,
+    'Medical reasons',
+    'APPROVED',
+    1,
+    '2026-09-20 10:30:00',
+    'Leave approved'
+),
+(
+    3,
+    3,
+    '2026-10-05',
+    '2026-10-07',
+    3.00,
+    'Family function',
+    'REJECTED',
+    1,
+    '2026-09-20 11:00:00',
+    'Leave cannot be approved for these dates'
+);
+
+
+7.Attendance
+INSERT INTO attendance
+(
+    employee_id,
+    attendance_date,
+    check_in,
+    check_out,
+    status,
+    worked_minutes,
+    overtime_minutes,
+    remarks
+)
+VALUES
+(
+    1,
+    '2026-09-18',
+    '2026-09-18 09:00:00',
+    '2026-09-18 18:00:00',
+    'PRESENT',
+    540,
+    60,
+    'Regular working day'
+),
+(
+    2,
+    '2026-09-18',
+    '2026-09-18 09:15:00',
+    '2026-09-18 17:30:00',
+    'PRESENT',
+    495,
+    0,
+    'Regular working day'
+),
+(
+    3,
+    '2026-09-18',
+    NULL,
+    NULL,
+    'ON_LEAVE',
+    0,
+    0,
+    'Approved leave'
+);
+
+
+8.Salary component
+
+INSERT INTO salary_component
+(
+    component_code,
+    component_name,
+    component_type,
+    calculation_method,
+    is_taxable,
+    is_pf_applicable,
+    is_esi_applicable
+)
+VALUES
+(
+    'BASIC',
+    'Basic Salary',
+    'EARNING',
+    'FLAT',
+    TRUE,
+    TRUE,
+    TRUE
+),
+(
+    'HRA',
+    'House Rent Allowance',
+    'EARNING',
+    'PERCENTAGE',
+    TRUE,
+    FALSE,
+    TRUE
+),
+(
+    'PF',
+    'Provident Fund',
+    'DEDUCTION',
+    'PERCENTAGE',
+    FALSE,
+    TRUE,
+    FALSE
+);
+
+
+9.employee_salary
+
+INSERT INTO employee_salary
+(
+    employee_id,
+    annual_ctc,
+    monthly_gross,
+    effective_from,
+    effective_to,
+    is_active
+)
+VALUES
+(
+    1,
+    600000.00,
+    50000.00,
+    '2026-04-01',
+    NULL,
+    TRUE
+),
+(
+    2,
+    480000.00,
+    40000.00,
+    '2026-04-01',
+    NULL,
+    TRUE
+),
+(
+    3,
+    720000.00,
+    60000.00,
+    '2026-04-01',
+    NULL,
+    TRUE
+);
+
+
+10.employee_salary_detail
+
+INSERT INTO employee_salary_detail
+(
+    employee_salary_id,
+    component_id,
+    amount
+)
+VALUES
+(1, 1, 25000.00),
+(1, 2, 12500.00),
+(1, 3, 3000.00),
+(2, 1, 20000.00),
+(2, 2, 10000.00),
+(2, 3, 2400.00),
+(3, 1, 30000.00),
+(3, 2, 15000.00),
+(3, 3, 3600.00);
+
+11.tax slab
+
+INSERT INTO tax_slab
+(
+    tax_regime,
+    financial_year,
+    slab_order,
+    lower_limit,
+    upper_limit,
+    tax_rate,
+    cess_rate
+)
+VALUES
+(
+    'NEW',
+    '2026-2027',
+    1,
+    0.00,
+    400000.00,
+    0.00,
+    4.00
+),
+(
+    'NEW',
+    '2026-2027',
+    2,
+    400000.00,
+    800000.00,
+    5.00,
+    4.00
+),
+(
+    'NEW',
+    '2026-2027',
+    3,
+    800000.00,
+    1200000.00,
+    10.00,
+    4.00
+);
+
+12.payroll_run
+
+INSERT INTO payroll_run
+(
+    payroll_year,
+    payroll_month,
+    status,
+    processed_by,
+    approved_by,
+    processed_at,
+    approved_at
+)
+VALUES
+(
+    2026,
+    9,
+    'PROCESSED',
+    1,
+    NULL,
+    '2026-09-20 10:00:00',
+    NULL
+);
+
+
+13.employee_payroll
+
+INSERT INTO employee_payroll
+(
+    payroll_run_id,
+    employee_id,
+    working_days,
+    present_days,
+    paid_leave_days,
+    lop_days,
+    gross_earnings,
+    lop_deduction,
+    total_deductions,
+    net_pay,
+    payment_status
+)
+VALUES
+(
+    1,
+    1,
+    22.00,
+    20.00,
+    2.00,
+    0.00,
+    50000.00,
+    0.00,
+    3000.00,
+    47000.00,
+    'UNPAID'
+),
+(
+    1,
+    2,
+    22.00,
+    21.00,
+    1.00,
+    0.00,
+    40000.00,
+    0.00,
+    2400.00,
+    37600.00,
+    'UNPAID'
+),
+(
+    1,
+    3,
+    22.00,
+    19.00,
+    1.00,
+    2.00,
+    60000.00,
+    5454.55,
+    6000.00,
+    48545.45,
+    'PAID'
+);
+
+
+14.payroll_item
+
+INSERT INTO payroll_item
+(
+    employee_payroll_id,
+    component_id,
+    amount
+)
+VALUES
+(1, 1, 25000.00),
+(1, 2, 12500.00),
+(1, 3, 3000.00);
+
+
+15.audit log
+INSERT INTO audit_log
+(
+    entity_name,
+    entity_id,
+    action,
+    performed_by,
+    old_values,
+    new_values
+)
+VALUES
+(
+    'employee',
+    1,
+    'INSERT',
+    3,
+    NULL,
+    '{"employee_code":"EMP001","first_name":"Rahul","last_name":"Sharma"}'
+),
+(
+    'employee_salary',
+    1,
+    'UPDATE',
+    3,
+    '{"monthly_gross":45000}',
+    '{"monthly_gross":50000}'
+),
+(
+    'leave_application',
+    1,
+    'UPDATE',
+    1,
+    '{"status":"PENDING"}',
+    '{"status":"APPROVED"}'
+);

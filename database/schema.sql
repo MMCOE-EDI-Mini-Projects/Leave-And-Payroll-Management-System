@@ -1,0 +1,304 @@
+-- =========================================================
+-- LEAVE AND PAYROLL MANAGEMENT SYSTEM (LPMS)
+-- NORMALIZED DATABASE SCHEMA (3NF) — 15 TABLES
+-- =========================================================
+CREATE DATABASE IF NOT EXISTS lpms;
+USE lpms;
+
+-- =========================================================
+-- MODULE 1 & 2 : EMPLOYEE & AUTHENTICATION
+-- =========================================================
+
+-- 1. DEPARTMENT
+CREATE TABLE department (
+    department_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    department_code VARCHAR(30) NOT NULL UNIQUE,
+    department_name VARCHAR(100) NOT NULL UNIQUE,
+    description VARCHAR(255),
+    parent_department_id BIGINT UNSIGNED NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_dept_parent 
+        FOREIGN KEY (parent_department_id) 
+        REFERENCES department(department_id) 
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- 2. DESIGNATION
+CREATE TABLE designation (
+    designation_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    designation_code VARCHAR(30) NOT NULL UNIQUE,
+    designation_name VARCHAR(100) NOT NULL UNIQUE,
+    job_level VARCHAR(30),
+    description VARCHAR(255),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 3. EMPLOYEE (Master Employee + Current Assignment + Auth merged)
+CREATE TABLE employee (
+    employee_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_code VARCHAR(30) NOT NULL UNIQUE,
+    first_name VARCHAR(60) NOT NULL,
+    last_name VARCHAR(60) NOT NULL,
+    gender ENUM('MALE', 'FEMALE', 'OTHER') NOT NULL,
+    date_of_birth DATE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    phone VARCHAR(20),
+    date_of_joining DATE NOT NULL,
+    date_of_exit DATE,
+    employment_type ENUM('FULL_TIME', 'PART_TIME', 'PROBATION', 'INTERN') NOT NULL DEFAULT 'FULL_TIME',
+    employment_status ENUM('ACTIVE', 'ON_LEAVE', 'RESIGNED', 'TERMINATED') NOT NULL DEFAULT 'ACTIVE',
+    
+    -- Organizational assignments
+    department_id BIGINT UNSIGNED NOT NULL,
+    designation_id BIGINT UNSIGNED NOT NULL,
+    reporting_manager_id BIGINT UNSIGNED NULL,
+    
+    -- Authentication & RBAC (3 Roles)
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('EMPLOYEE', 'MANAGER', 'HR_ADMIN') NOT NULL DEFAULT 'EMPLOYEE',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_login_at DATETIME,
+    
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_emp_dept FOREIGN KEY (department_id) REFERENCES department(department_id),
+    CONSTRAINT fk_emp_desig FOREIGN KEY (designation_id) REFERENCES designation(designation_id),
+    CONSTRAINT fk_emp_manager FOREIGN KEY (reporting_manager_id) REFERENCES employee(employee_id) ON DELETE SET NULL,
+    CONSTRAINT chk_emp_exit_date CHECK (date_of_exit IS NULL OR date_of_exit >= date_of_joining)
+);
+
+-- =========================================================
+-- MODULE 3 : LEAVE MANAGEMENT
+-- =========================================================
+
+-- 4. LEAVE TYPE
+CREATE TABLE leave_type (
+    leave_type_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    leave_code VARCHAR(30) NOT NULL UNIQUE,
+    leave_name VARCHAR(100) NOT NULL,
+    description VARCHAR(255),
+    annual_entitlement DECIMAL(5,2) NOT NULL DEFAULT 12.00,
+    is_paid BOOLEAN NOT NULL DEFAULT TRUE,
+    allows_half_day BOOLEAN NOT NULL DEFAULT TRUE,
+    allows_carry_forward BOOLEAN NOT NULL DEFAULT FALSE,
+    max_carry_forward DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 5. LEAVE BALANCE
+CREATE TABLE leave_balance (
+    leave_balance_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    leave_type_id BIGINT UNSIGNED NOT NULL,
+    leave_year SMALLINT UNSIGNED NOT NULL,
+    opening_balance DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+    accrued DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+    used DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+    closing_balance DECIMAL(5,2) GENERATED ALWAYS AS (opening_balance + accrued - used) STORED,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_bal_emp FOREIGN KEY (employee_id) REFERENCES employee(employee_id) ON DELETE CASCADE,
+    CONSTRAINT fk_bal_type FOREIGN KEY (leave_type_id) REFERENCES leave_type(leave_type_id) ON DELETE RESTRICT,
+    CONSTRAINT uq_emp_leave_year UNIQUE (employee_id, leave_type_id, leave_year)
+);
+
+-- 6. LEAVE APPLICATION (With integrated Single-Stage Approval)
+CREATE TABLE leave_application (
+    leave_application_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    leave_type_id BIGINT UNSIGNED NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    total_days DECIMAL(5,2) NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    status ENUM('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    
+    -- Integrated approval workflow attributes
+    approver_id BIGINT UNSIGNED NULL,
+    actioned_at DATETIME NULL,
+    manager_comments VARCHAR(500) NULL,
+    
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_app_emp FOREIGN KEY (employee_id) REFERENCES employee(employee_id),
+    CONSTRAINT fk_app_type FOREIGN KEY (leave_type_id) REFERENCES leave_type(leave_type_id),
+    CONSTRAINT fk_app_approver FOREIGN KEY (approver_id) REFERENCES employee(employee_id),
+    CONSTRAINT chk_app_dates CHECK (end_date >= start_date),
+    CONSTRAINT chk_app_days CHECK (total_days > 0)
+);
+
+-- =========================================================
+-- MODULE 4 : ATTENDANCE MANAGEMENT
+-- =========================================================
+
+-- 7. ATTENDANCE (Loss of Pay calculation feeds directly from here)
+CREATE TABLE attendance (
+    attendance_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    attendance_date DATE NOT NULL,
+    check_in DATETIME NULL,
+    check_out DATETIME NULL,
+    status ENUM('PRESENT', 'ABSENT', 'HALF_DAY', 'ON_LEAVE', 'HOLIDAY', 'WEEKEND') NOT NULL,
+    worked_minutes INT UNSIGNED DEFAULT 0,
+    overtime_minutes INT UNSIGNED DEFAULT 0,
+    remarks VARCHAR(255) NULL,
+    is_locked BOOLEAN NOT NULL DEFAULT FALSE, -- CORRECTION: Added to prevent changes after payroll
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_att_emp FOREIGN KEY (employee_id) REFERENCES employee(employee_id) ON DELETE CASCADE,
+    CONSTRAINT uq_att_emp_date UNIQUE (employee_id, attendance_date),
+    CONSTRAINT chk_att_checkout CHECK (check_out IS NULL OR check_in IS NULL OR check_out >= check_in)
+);
+
+-- =========================================================
+-- MODULE 5 & 7 : PAYROLL CONFIGURATION & RULE ENGINE
+-- =========================================================
+
+-- 8. SALARY COMPONENT
+CREATE TABLE salary_component (
+    component_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    component_code VARCHAR(40) NOT NULL UNIQUE,
+    component_name VARCHAR(100) NOT NULL,
+    component_type ENUM('EARNING', 'DEDUCTION', 'EMPLOYER_CONTRIBUTION') NOT NULL,
+    calculation_method ENUM('FLAT', 'PERCENTAGE', 'FORMULA') NOT NULL,
+    is_taxable BOOLEAN NOT NULL DEFAULT TRUE,
+    is_pf_applicable BOOLEAN NOT NULL DEFAULT FALSE,
+    is_esi_applicable BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 9. EMPLOYEE SALARY (Current Salary Master & Structure)
+CREATE TABLE employee_salary (
+    employee_salary_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    annual_ctc DECIMAL(15,2) NOT NULL,
+    monthly_gross DECIMAL(15,2) NOT NULL,
+    effective_from DATE NOT NULL,
+    effective_to DATE NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_esal_emp FOREIGN KEY (employee_id) REFERENCES employee(employee_id),
+    CONSTRAINT chk_esal_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+);
+
+-- 10. EMPLOYEE SALARY DETAIL (Itemized Component Breakdown per Employee)
+CREATE TABLE employee_salary_detail (
+    salary_detail_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_salary_id BIGINT UNSIGNED NOT NULL,
+    component_id BIGINT UNSIGNED NOT NULL,
+    component_value DECIMAL(15,2) NOT NULL, -- CORRECTION: Renamed from 'amount'
+    
+    CONSTRAINT fk_esald_salary FOREIGN KEY (employee_salary_id) REFERENCES employee_salary(employee_salary_id) ON DELETE CASCADE,
+    CONSTRAINT fk_esald_comp FOREIGN KEY (component_id) REFERENCES salary_component(component_id),
+    CONSTRAINT uq_esal_comp UNIQUE (employee_salary_id, component_id)
+);
+
+-- 11. TAX SLAB & RULES (Unified Rule Configuration)
+CREATE TABLE tax_slab (
+    tax_slab_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tax_regime ENUM('OLD', 'NEW') NOT NULL DEFAULT 'NEW',
+    financial_year VARCHAR(9) NOT NULL, -- e.g., '2025-2026'
+    slab_order INT NOT NULL,
+    lower_limit DECIMAL(15,2) NOT NULL,
+    upper_limit DECIMAL(15,2) NULL, -- NULL indicates no upper cap
+    tax_rate DECIMAL(5,2) NOT NULL, -- e.g. 5.00 for 5%
+    cess_rate DECIMAL(5,2) NOT NULL DEFAULT 4.00,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT uq_slab UNIQUE (tax_regime, financial_year, slab_order)
+);
+
+-- =========================================================
+-- MODULE 5 : PAYROLL PROCESSING & TRANSACTIONS
+-- =========================================================
+
+-- 12. PAYROLL RUN
+CREATE TABLE payroll_run (
+    payroll_run_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    payroll_year SMALLINT UNSIGNED NOT NULL,
+    payroll_month TINYINT UNSIGNED NOT NULL,
+    status ENUM('DRAFT', 'PROCESSED', 'APPROVED', 'PAID') NOT NULL DEFAULT 'DRAFT',
+    processed_by BIGINT UNSIGNED NOT NULL,
+    approved_by BIGINT UNSIGNED NULL,
+    processed_at DATETIME NULL,
+    approved_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_prun_proc FOREIGN KEY (processed_by) REFERENCES employee(employee_id),
+    CONSTRAINT fk_prun_appr FOREIGN KEY (approved_by) REFERENCES employee(employee_id),
+    CONSTRAINT uq_prun_period UNIQUE (payroll_year, payroll_month),
+    CONSTRAINT chk_prun_month CHECK (payroll_month BETWEEN 1 AND 12)
+);
+
+-- 13. EMPLOYEE PAYROLL (Monthly Payslip Summary)
+CREATE TABLE employee_payroll (
+    employee_payroll_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    payroll_run_id BIGINT UNSIGNED NOT NULL,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    
+    -- Derived Attendance & LOP parameters for the month
+    working_days DECIMAL(4,2) NOT NULL,
+    present_days DECIMAL(4,2) NOT NULL,
+    paid_leave_days DECIMAL(4,2) NOT NULL DEFAULT 0,
+    lop_days DECIMAL(4,2) NOT NULL DEFAULT 0,
+    
+    -- Financial Totals
+    gross_earnings DECIMAL(15,2) NOT NULL,
+    lop_deduction DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    total_deductions DECIMAL(15,2) NOT NULL,
+    net_pay DECIMAL(15,2) NOT NULL,
+    
+    payment_status ENUM('UNPAID', 'PAID') NOT NULL DEFAULT 'UNPAID',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_epay_run FOREIGN KEY (payroll_run_id) REFERENCES payroll_run(payroll_run_id) ON DELETE CASCADE,
+    CONSTRAINT fk_epay_emp FOREIGN KEY (employee_id) REFERENCES employee(employee_id),
+    CONSTRAINT uq_run_employee UNIQUE (payroll_run_id, employee_id)
+);
+
+-- 14. PAYROLL ITEM (Itemized lines on the payslip: Basic, HRA, PF, Tax, etc.)
+CREATE TABLE payroll_item (
+    payroll_item_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_payroll_id BIGINT UNSIGNED NOT NULL,
+    component_id BIGINT UNSIGNED NOT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    
+    CONSTRAINT fk_pitem_epay FOREIGN KEY (employee_payroll_id) REFERENCES employee_payroll(employee_payroll_id) ON DELETE CASCADE,
+    CONSTRAINT fk_pitem_comp FOREIGN KEY (component_id) REFERENCES salary_component(component_id),
+    CONSTRAINT uq_epay_component UNIQUE (employee_payroll_id, component_id)
+);
+
+-- =========================================================
+-- MODULE 6 : AUDIT & SYSTEM LOG
+-- =========================================================
+
+-- 15. AUDIT LOG
+CREATE TABLE audit_log (
+    audit_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entity_name VARCHAR(50) NOT NULL,
+    entity_id BIGINT UNSIGNED NOT NULL,
+    action ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
+    performed_by BIGINT UNSIGNED NULL,
+    performed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    old_values JSON NULL,
+    new_values JSON NULL,
+    
+    CONSTRAINT fk_audit_user FOREIGN KEY (performed_by) REFERENCES employee(employee_id) ON DELETE SET NULL
+);
+
+-- Optimization Indexes
+CREATE INDEX idx_emp_dept ON employee(department_id);
+CREATE INDEX idx_emp_status ON employee(employment_status);
+CREATE INDEX idx_att_emp_date ON attendance(employee_id, attendance_date);
+CREATE INDEX idx_lapp_status ON leave_application(status);
+CREATE INDEX idx_epay_run ON employee_payroll(payroll_run_id);
